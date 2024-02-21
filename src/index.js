@@ -1,5 +1,19 @@
-const {map, concatMap, delay, toArray, filter, find, take, takeUntil, debounceTime, distinctUntilChanged} = rxjs.operators;
-const {from, interval, of, BehaviorSubject, Subject, fromEvent} = rxjs;
+const {
+    map,
+    concatMap,
+    delay,
+    toArray,
+    filter,
+    find,
+    take,
+    takeUntil,
+    debounceTime,
+    distinctUntilChanged,
+    takeWhile,
+    catchError,
+    switchMap
+} = rxjs.operators;
+const {from, interval, of, BehaviorSubject, Subject, fromEvent, ReplaySubject, timer} = rxjs;
 
 
 const arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -18,7 +32,7 @@ from(arr)
         concatMap(item => of(item).pipe(delay(1000)))
     )
     .subscribe(value => {
-        console.log(value);
+        //console.log(value);
     });
 
 
@@ -114,3 +128,50 @@ fromEvent(inputEl, 'input')
     .subscribe(value => {
         //console.log(value)
     })
+
+
+// 9
+const replaySubject = new ReplaySubject(1);
+let timeNewStream = 5 * 1000;
+const timeEndStream = 60 * 60 * 1000;
+
+
+const sub = replaySubject
+    .pipe(
+        takeUntil(interval(timeEndStream))
+    )
+    .subscribe({
+        next: (value) => {
+            const data = {}
+            if (Object.keys(data).length) {
+                console.log('Данные есть, завершаем подписку');
+                sub.unsubscribe();
+            } else {
+                setTimeout(() => {
+                    console.log('Получение данных');
+                    timeNewStream *= 2;
+                    replaySubject.next();
+                }, timeNewStream)
+            }
+        },
+        error: (error) => {
+            timeNewStream = 5000;
+            console.error('Произошла ошибка:', error);
+            replaySubject.next();
+        },
+        complete: () => console.log('Подписка завершена')
+    })
+
+replaySubject.next();
+
+
+
+
+
+
+
+
+
+
+
+
