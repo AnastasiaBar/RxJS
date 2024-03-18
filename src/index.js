@@ -9,11 +9,10 @@ const {
     takeUntil,
     debounceTime,
     distinctUntilChanged,
-    takeWhile,
-    catchError,
-    switchMap
+    switchMap,
+    repeatWhen
 } = rxjs.operators;
-const {from, interval, of, BehaviorSubject, Subject, fromEvent, ReplaySubject, timer} = rxjs;
+const {from, interval, of, BehaviorSubject, Subject, fromEvent, ReplaySubject, Observable} = rxjs;
 
 
 const arr = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
@@ -131,27 +130,41 @@ fromEvent(inputEl, 'input')
 
 
 // 9
+
+/*
+Сделать подписку, которая будет повторяться каждые N секунд начиная с 5сек и увеличиваясь в
+геометрической прогрессии. Завершается автоматом через 60 минут, если за это время подписка
+получила ошибку, надо перезапустить поток по новой с 5 сек. тут поможет ReplaySubject. Если
+мы за 60 минут получаем нужные нам данные, то тоже завершаем подписку.
+    Грубо говоря тебе приходит ответ от бэка с пустым объектом, а тебе нужные данные,
+    которые еще бэк не получил и как только пришел не пустой обьект, то можно
+    кончать подписку, а если ошибка, то все по новой
+*/
+
+function data() {
+    return Math.random() > 0.2 ? null : {data: 1};
+}
+
+
 const replaySubject = new ReplaySubject(1);
 let timeNewStream = 5 * 1000;
 const timeEndStream = 60 * 60 * 1000;
 
-
-const sub = replaySubject
-    .pipe(
-        takeUntil(interval(timeEndStream))
-    )
+const sub = replaySubject.pipe(
+    switchMap(() => interval(timeNewStream).pipe(
+        takeUntil(interval(timeEndStream)),
+        delay(timeNewStream)
+    ))
+)
     .subscribe({
-        next: (value) => {
-            const data = {}
-            if (Object.keys(data).length) {
+        next: () => {
+            if (data && Object.keys(data).length) {
                 console.log('Данные есть, завершаем подписку');
                 sub.unsubscribe();
             } else {
-                setTimeout(() => {
-                    console.log('Получение данных');
-                    timeNewStream *= 2;
-                    replaySubject.next();
-                }, timeNewStream)
+                console.log('Получение данных');
+                timeNewStream *= 2;
+                replaySubject.next();
             }
         },
         error: (error) => {
@@ -160,18 +173,35 @@ const sub = replaySubject
             replaySubject.next();
         },
         complete: () => console.log('Подписка завершена')
+    });
+
+//replaySubject.next();
+
+
+const timeStream$ = new Subject();
+
+const subscription$ = timeStream$.pipe(
+    switchMap((newInterval) => interval(newInterval).pipe(
+        takeUntil(interval(timeEndStream)),
+        repeatWhen(errors => errors.pipe(delay(5000)))
+    )),
+    switchMap(() => {
+        const fetchedData = data();
+        if (fetchedData !== null) {
+            console.log('Данные есть, завершаем подписку');
+            subscription$.unsubscribe();
+        } else {
+            timeNewStream *= 2;
+            console.log('Получение данных');
+            timeStream$.next(timeNewStream);
+            return new Observable();
+        }
     })
+)
+    .subscribe(
+        () => {},
+        error => console.error('Произошла ошибка:', error),
+        () => console.log('Подписка завершена')
+    );
 
-replaySubject.next();
-
-
-
-
-
-
-
-
-
-
-
-
+//timeStream$.next(timeNewStream);
